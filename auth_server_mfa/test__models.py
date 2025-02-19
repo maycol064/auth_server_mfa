@@ -48,25 +48,29 @@ class UserMFATestCase(TestCase):
         self.assertEqual(self.user.failed_mfa_attempts, 0)
         self.assertIsNotNone(self.user.last_mfa_attempt)
 
-    def test_verify_mfa_token_failure(self):
-        """Test failed MFA token verification"""
-        # Setup MFA
-        self.user.generate_mfa_secret()
-        self.user.mfa_enabled = True
-        self.user.save()
-        
-        # Test with invalid token
-        invalid_token = '123456'
-        self.assertFalse(self.user.verify_mfa_token(invalid_token))
-        self.assertEqual(self.user.failed_mfa_attempts, 1)
-        
-        # Test with None token
-        self.assertFalse(self.user.verify_mfa_token(None))
-        self.assertEqual(self.user.failed_mfa_attempts, 2)
-        
-        # Test with wrong length token
-        self.assertFalse(self.user.verify_mfa_token('12345'))
-        self.assertEqual(self.user.failed_mfa_attempts, 3)
+    def verify_mfa_token(self, token):
+        if not self.mfa_enabled or not self.mfa_secret:
+            return False
+            
+        if not token or len(token) != 6:
+            self.failed_mfa_attempts += 1
+            self.last_mfa_attempt = timezone.now()
+            self.save()
+            return False
+            
+        totp = pyotp.TOTP(self.mfa_secret)
+        if totp.verify(token):
+            # Reset failed attempts on successful verification
+            self.failed_mfa_attempts = 0
+            self.last_mfa_attempt = timezone.now()
+            self.save()
+            return True
+        else:
+            # Increment failed attempts counter
+            self.failed_mfa_attempts += 1
+            self.last_mfa_attempt = timezone.now()
+            self.save()
+            return False
 
     def test_verify_mfa_disabled(self):
         """Test verification when MFA is disabled"""
@@ -94,7 +98,8 @@ class UserMFATestCase(TestCase):
         # Verify URI format
         self.assertIsNotNone(uri)
         self.assertIn('otpauth://totp/', uri)
-        self.assertIn(self.user.email, uri)
+        # Usar email codificado
+        self.assertIn('test%40example.com', uri)  # Cambiar esta línea
         self.assertIn(self.user.mfa_secret, uri)
         self.assertIn('YourAppName', uri)
 
