@@ -19,6 +19,10 @@ class AuthViewSet(viewsets.ViewSet):
     authentication_classes = [TokenAuthentication]
     permission_classes = []
 
+    @action(detail=False, methods=['get'])
+    def healty(self, request):
+        return Response({ 'healty': 'ok' })
+
     @action(detail=False, methods=['post'])
     def register(self, request):
         serializer = RegisterSerializer(data=request.data)
